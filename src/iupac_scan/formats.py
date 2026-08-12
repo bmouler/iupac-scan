@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from itertools import chain
+from typing import Final
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +16,7 @@ class Record:
     sequence: str
 
 
-_SPREADSHEET_FORMULA_PREFIXES = frozenset("=+-@")
+_SPREADSHEET_FORMULA_PREFIXES: Final[frozenset[str]] = frozenset("=+-@")
 
 
 def _identifier(header: str, line_number: int) -> str:

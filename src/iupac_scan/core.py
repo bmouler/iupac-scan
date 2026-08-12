@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
+from typing import Final, Literal, TypeAlias
 
-IUPAC_MASKS: dict[str, int] = {
+IUPAC_MASKS: Final[Mapping[str, int]] = {
     "A": 0b0001,
     "C": 0b0010,
     "G": 0b0100,
@@ -24,7 +25,9 @@ IUPAC_MASKS: dict[str, int] = {
     "N": 0b1111,
 }
 
-_MASK_NAMES = " ACMGRSVTWYHKDBN"
+_MASK_NAMES: Final = " ACMGRSVTWYHKDBN"
+
+Strand: TypeAlias = Literal["+", "-"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +51,7 @@ class Match:
 
     start: int
     end: int
-    strand: str
+    strand: Strand
     sequence: str
 
 
@@ -80,10 +83,10 @@ def _mask_name(mask: int) -> str:
     return _MASK_NAMES[mask]
 
 
-def _compile_masks(symbols: Iterator[str]) -> CompiledMotif:
+def _compile_masks(symbols: Iterable[str]) -> CompiledMotif:
     motif = "".join(symbols)
     position_masks = tuple(IUPAC_MASKS[symbol] for symbol in motif)
-    compatibility = []
+    compatibility: list[int] = []
     for base_bit in (1, 2, 4, 8):
         vector = 0
         for position, motif_mask in enumerate(position_masks):
@@ -93,7 +96,12 @@ def _compile_masks(symbols: Iterator[str]) -> CompiledMotif:
     return CompiledMotif(
         motif,
         position_masks,
-        tuple(compatibility),
+        (
+            compatibility[0],
+            compatibility[1],
+            compatibility[2],
+            compatibility[3],
+        ),
         1 << (len(motif) - 1),
     )
 
@@ -103,7 +111,9 @@ def compile_motif(motif: str) -> CompiledMotif:
     return _compile_masks(iter(_validate_iupac(motif, "motif")))
 
 
-def _scan_one(sequence: str, compiled: CompiledMotif, strand: str) -> Iterator[Match]:
+def _scan_one(
+    sequence: str, compiled: CompiledMotif, strand: Strand
+) -> Iterator[Match]:
     state = 0
     length = len(compiled.motif)
     for end, symbol in enumerate(sequence):

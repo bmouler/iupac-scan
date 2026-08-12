@@ -6,14 +6,24 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
-from typing import IO, TextIO
+from typing import Final, TextIO, cast
 
 from .core import compile_motif, scan_sequence
 from .formats import parse_records
 
-_FIELDS = ("record_id", "start", "end", "strand", "matched_sequence")
+
+class _Arguments(argparse.Namespace):
+    motif: str
+    input: str
+    both_strands: bool
+    input_format: str
+    output_format: str
+    output: str
+
+
+_FIELDS: Final = ("record_id", "start", "end", "strand", "matched_sequence")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -38,13 +48,13 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _open_input(path: str) -> nullcontext[TextIO] | IO[str]:
+def _open_input(path: str) -> AbstractContextManager[TextIO]:
     if path == "-":
         return nullcontext(sys.stdin)
     return Path(path).open(encoding="utf-8")
 
 
-def _open_output(path: str) -> nullcontext[TextIO] | IO[str]:
+def _open_output(path: str) -> AbstractContextManager[TextIO]:
     if path == "-":
         return nullcontext(sys.stdout)
     return Path(path).open("w", encoding="utf-8", newline="")
@@ -71,7 +81,7 @@ def _write_match(
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line scanner and return a process exit status."""
-    args = _parser().parse_args(argv)
+    args = cast(_Arguments, _parser().parse_args(argv))
     try:
         motif = compile_motif(args.motif)
         with _open_input(args.input) as input_file, _open_output(args.output) as output:

@@ -70,18 +70,16 @@ def _reverse_complement(sequence: str) -> str:
     return "".join(_COMPLEMENT[symbol] for symbol in reversed(sequence.upper()))
 
 
-@given(sequence=_SEQUENCES, motif=_MOTIFS, both_strands=st.booleans())
-def test_scan_matches_naive_iupac_oracle(
-    sequence: str, motif: str, both_strands: bool
-) -> None:
+@given(sequence=_SEQUENCES, motif=_MOTIFS)
+def test_scan_matches_naive_iupac_oracle(sequence: str, motif: str) -> None:
     assume(sequence)
-    observed = {
-        (match.start, match.end, match.strand)
-        for match in scan_sequence(
-            sequence, compile_motif(motif), both_strands=both_strands
-        )
-    }
-    assert observed == _naive_matches(sequence, motif, both_strands=both_strands)
+    compiled = compile_motif(motif)
+    for both_strands in (False, True):
+        observed = {
+            (match.start, match.end, match.strand)
+            for match in scan_sequence(sequence, compiled, both_strands=both_strands)
+        }
+        assert observed == _naive_matches(sequence, motif, both_strands=both_strands)
 
 
 @given(sequence=_SEQUENCES, motif=_MOTIFS)
