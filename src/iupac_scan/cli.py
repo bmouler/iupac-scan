@@ -23,6 +23,17 @@ class _Arguments(argparse.Namespace):
     output: str
 
 
+class _StableHelpFormatter(argparse.HelpFormatter):
+    """Preserve value metavars for every option alias across Python versions."""
+
+    def _format_action_invocation(self, action: argparse.Action) -> str:
+        if not action.option_strings or action.nargs == 0:
+            return super()._format_action_invocation(action)
+        default = self._get_default_metavar_for_optional(action)
+        arguments = self._format_args(action, default)
+        return ", ".join(f"{option} {arguments}" for option in action.option_strings)
+
+
 _FIELDS: Final = ("record_id", "start", "end", "strand", "matched_sequence")
 
 
@@ -30,6 +41,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="iupac-scan",
         description="Scan FASTA or FASTQ records for an IUPAC DNA motif.",
+        formatter_class=_StableHelpFormatter,
     )
     parser.add_argument("motif", help="non-empty motif using the IUPAC DNA alphabet")
     parser.add_argument(
