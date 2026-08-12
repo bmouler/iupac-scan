@@ -19,6 +19,72 @@ def test_fastq_streams_records() -> None:
     assert list(parse_fastq(lines)) == [Record("one", "ACGT")]
 
 
+def test_identifiers_end_at_first_whitespace_delimited_field() -> None:
+    assert list(parse_fasta([">first second third\n", "A\n"])) == [Record("first", "A")]
+
+
+def test_fasta_only_strips_line_endings() -> None:
+    assert list(parse_fasta([">a\n", " A \n"])) == [Record("a", "A")]
+    with pytest.raises(ValueError, match="expected FASTA header on line 1"):
+        list(parse_fasta(["  >a\n", "A\n"]))
+
+
+def test_fastq_only_strips_line_endings() -> None:
+    assert list(parse_fastq(["@a\n", " A \n", "+\n", "!!!\n"])) == [Record("a", " A ")]
+    with pytest.raises(ValueError, match="expected FASTQ header on line 1"):
+        list(parse_fastq(["  @a\n", "A\n", "+\n", "!\n"]))
+
+
+def test_auto_detection_preserves_input_for_selected_parser() -> None:
+    with pytest.raises(ValueError, match="expected FASTA header on line 1"):
+        list(parse_records(["  >a\n", "A\n"]))
+
+
+def test_line_endings_and_internal_newlines_are_not_generic_whitespace() -> None:
+    assert list(parse_fasta([">a\n", "AC\t\n"])) == [Record("a", "AC")]
+    with pytest.raises(ValueError, match="expected FASTA header on line 1"):
+        list(parse_fasta(["\n>a", "A\n"]))
+    with pytest.raises(ValueError, match="expected FASTQ header on line 1"):
+        list(parse_fastq(["\n@a", "A\n", "+\n", "!\n"]))
+    with pytest.raises(ValueError, match="sequence length 2 but quality length 3"):
+        list(parse_fastq(["@a\n", "A\t\n", "+\n", "!!!\n"]))
+    assert list(parse_fasta([">a\n", " A\tB \n"])) == [Record("a", "A\tB")]
+    assert list(parse_fastq(["@a\n", "A \n", "+\n", "!!\n"])) == [Record("a", "A ")]
+    assert list(parse_fastq(["@a\n", "A\t\n", "+\n", "!!\n"])) == [Record("a", "A\t")]
+    assert list(parse_fastq(["@a\n", "A \n", "+\n", "!\t\n"])) == [Record("a", "A ")]
+    with pytest.raises(ValueError, match="expected FASTA header on line 1"):
+        list(parse_fasta(["\t\n", ">a\n", "A\n"]))
+    with pytest.raises(ValueError, match="expected FASTQ header on line 1"):
+        list(parse_fastq(["\t\n", "@a\n", "A\n", "+\n", "!\n"]))
+    assert list(parse_fastq(["@a\r\n", "A\r\n", "+\r\n", "!\r\n"])) == [
+        Record("a", "A")
+    ]
+
+
+def test_records_distinguish_parser_state_and_exact_diagnostics() -> None:
+    assert list(parse_fasta([">a\n", "A\n", ">b\n", "C\n", "G\n"])) == [
+        Record("a", "A"),
+        Record("b", "CG"),
+    ]
+    assert list(parse_fasta([">a\n", "A ", "\tC\n"])) == [Record("a", "AC")]
+    assert list(parse_fastq(["@a\n", "A\n", "+\n", "!\n"])) == [Record("a", "A")]
+    with pytest.raises(ValueError) as fasta_error:
+        list(parse_fasta([]))
+    assert str(fasta_error.value) == "FASTA input contains no records"
+    with pytest.raises(ValueError) as fastq_error:
+        list(parse_fastq([]))
+    assert str(fastq_error.value) == "FASTQ input contains no records"
+    with pytest.raises(ValueError) as detect_error:
+        list(parse_records(["bad\n"]))
+    assert str(detect_error.value) == "cannot detect input format: expected '>' or '@'"
+    with pytest.raises(ValueError) as empty_error:
+        list(parse_records([]))
+    assert str(empty_error.value) == "input contains no records"
+    with pytest.raises(ValueError) as identifier_error:
+        list(parse_fastq(["@\n", "A\n", "+\n", "!\n"]))
+    assert str(identifier_error.value) == "missing record ID on line 1"
+
+
 @pytest.mark.parametrize(
     ("parser", "lines", "message"),
     [

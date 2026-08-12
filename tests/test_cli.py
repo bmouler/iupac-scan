@@ -8,6 +8,89 @@ from pathlib import Path
 
 from iupac_scan import cli
 
+EXPECTED_HELP = (
+    "usage: iupac-scan [-h] [--both-strands] "
+    "[--input-format {auto,fasta,fastq}]\n"
+    """                  [--output-format {tsv,jsonl}] [-o OUTPUT]
+                  motif [input]
+
+Scan FASTA or FASTQ records for an IUPAC DNA motif.
+
+positional arguments:
+  motif                 non-empty motif using the IUPAC DNA alphabet
+  input                 input FASTA/FASTQ path (default: stdin)
+
+options:
+  -h, --help            show this help message and exit
+  --both-strands        also scan the reverse complement
+  --input-format {auto,fasta,fastq}
+  --output-format {tsv,jsonl}
+  -o OUTPUT, --output OUTPUT
+                        output path (default: stdout)
+"""
+)
+
+
+def test_parser_help_documents_the_complete_cli_contract() -> None:
+    assert cli._parser().format_help() == EXPECTED_HELP
+
+
+def test_jsonl_is_compact() -> None:
+    output = io.StringIO()
+    cli._write_match(output, "jsonl", "r", 1, 2, "+", "A")
+    assert output.getvalue() == (
+        '{"record_id":"r","start":1,"end":2,"strand":"+","matched_sequence":"A"}\n'
+    )
+
+
+def test_explicit_input_format_is_honored(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(sys, "stdin", io.StringIO("@r\nA\n+\n!\n"))
+    assert cli.main(["A", "--input-format", "fasta"]) == 2
+    assert "expected FASTA header on line 1" in capsys.readouterr().err
+
+
+def test_file_io_is_utf8_under_an_ascii_locale(tmp_path: Path) -> None:
+    source = tmp_path / "reads.fa"
+    output = tmp_path / "matches.tsv"
+    source.write_bytes(">réad\nA\n".encode())
+    command = Path(sys.executable).with_name("iupac-scan")
+    completed = subprocess.run(
+        [str(command), "A", str(source), "--output", str(output)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            "PATH": str(command.parent),
+            "PYTHONUTF8": "0",
+            "LC_ALL": "C",
+            "LANG": "C",
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert output.read_text(encoding="utf-8").splitlines()[1] == "réad\t0\t1\t+\tA"
+
+
+def test_open_helpers_pin_utf8_and_newline_policy(monkeypatch, tmp_path: Path) -> None:
+    observed: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+    original_open = Path.open
+
+    def recording_open(path: Path, *args: object, **kwargs: object):
+        observed.append((str(path), args, kwargs))
+        return original_open(path, *args, **kwargs)
+
+    input_path = tmp_path / "in.fa"
+    output_path = tmp_path / "out.tsv"
+    input_path.write_text(">a\nA\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "open", recording_open)
+    with cli._open_input(str(input_path)):
+        pass
+    with cli._open_output(str(output_path)):
+        pass
+    assert observed == [
+        (str(input_path), (), {"encoding": "utf-8"}),
+        (str(output_path), ("w",), {"encoding": "utf-8", "newline": ""}),
+    ]
+
 
 def test_main_reads_stdin_and_writes_tsv(monkeypatch, capsys) -> None:
     monkeypatch.setattr(sys, "stdin", io.StringIO(">r1\nAAAA\n"))

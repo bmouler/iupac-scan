@@ -58,6 +58,10 @@ def test_both_strands_reverse_complement_and_palindrome_duplicates() -> None:
     assert [match.strand for match in palindrome] == ["+", "-"]
 
 
+def test_reverse_complement_handles_each_single_base_mask() -> None:
+    assert compile_motif("ACGT").reverse_complement().motif == "ACGT"
+
+
 def test_string_motif_is_compiled_and_lowercase_sequence_is_normalized() -> None:
     assert list(scan_sequence("acgt", "cG")) == [Match(1, 3, "+", "CG")]
 

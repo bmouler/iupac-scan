@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
-from typing import Final, TextIO, cast
+from typing import Final, TextIO
 
 from .core import compile_motif, scan_sequence
 from .formats import parse_records
@@ -74,14 +74,15 @@ def _write_match(
         output.write("\t".join(map(str, values)) + "\n")
     else:
         output.write(
-            json.dumps(dict(zip(_FIELDS, values, strict=True)), separators=(",", ":"))
+            json.dumps(dict(zip(_FIELDS, values, strict=False)), separators=(",", ":"))
             + "\n"
         )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line scanner and return a process exit status."""
-    args = cast(_Arguments, _parser().parse_args(argv))
+    args = _Arguments()
+    _parser().parse_args(argv, namespace=args)
     try:
         motif = compile_motif(args.motif)
         with _open_input(args.input) as input_file, _open_output(args.output) as output:
