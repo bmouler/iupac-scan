@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-15
+
 - Replaced per-base compatibility accumulation with a compiled 16-entry mask table while preserving IUPAC, overlap, and strand-order semantics.
 - Added a deterministic end-to-end FASTA parse and both-strand scan benchmark with an independent nested-loop oracle.
 
