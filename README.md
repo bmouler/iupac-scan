@@ -54,19 +54,22 @@ Matches may overlap. With `--both-strands`, the motif and its reverse complement
 flowchart LR; M[IUPAC motif] --> C[compile: 4 bitmask vectors]; S[FASTA/FASTQ records] --> X[Shift-And state, 1 int]; C --> X; X --> B{both strands?}; B -->|reverse complement| X; X --> O[overlapping matches, zero-based]
 ```
 
-Compilation converts each motif character to a four-bit `A/C/G/T` mask, then transposes the motif into four Python-integer bit vectors. Scanning applies Shift-And: one integer state shift and compatibility intersection per sequence symbol. Degenerate sequence symbols combine up to four precompiled vectors. Motif degeneracy does not expand into concrete motifs and does not alter asymptotic scan cost; scan time is `O(n)` Python iterations with `O(m)` compilation/storage, where `n` is sequence length and `m` is motif length. Python big-integer operations still scale with the motif's machine-word width.
+Compilation converts each motif character to a four-bit `A/C/G/T` mask, then transposes the motif into four Python-integer bit vectors. For each strand, scanning combines those vectors into a 16-entry table indexed by the sequence symbol's four-bit mask, then applies one Shift-And state update and one table lookup per symbol. Motif degeneracy does not expand into concrete motifs or alter asymptotic scan cost; scan memory remains constant apart from emitted matches.
 
 ## Reproducible local evidence
 
-`benchmarks/benchmark.py` compares Shift-And with a correct expansion-free nested-loop baseline. Both implementations first verify identical match coordinates. The workload is generated with `random.Random(20260812)`: 200,000 canonical bases, one deterministic compatible motif instance inserted at the midpoint, the fixed 32-symbol highly degenerate motif `BDHVNRYKMSWBDHVNRYKMSWBDHVNRYKMS`, and seven timed repeats.
+`PYTHONPATH=src python benchmarks/benchmark.py` compiles `ATNACAT`, parses 24 wrapped FASTA
+records totaling 192,000 bases, scans overlapping matches on both strands, and materializes all
+ordered match tuples. Before timing, it requires exact equality with an independent
+expansion-free nested-loop oracle.
 
-On an Apple M3 Max using the system Python 3 on 2026-08-12, median times from:
-
-```console
-python benchmarks/benchmark.py
-```
-
-were **0.0546 s for Shift-And** and **0.0795 s for the nested loop**, a **1.46x speedup**, with identical coordinates (one match for this seeded workload). These numbers are local evidence, not a portability guarantee; rerun the command on the target machine. JSON output includes every benchmark parameter and raw median values.
+On an Apple M3 Max with CPython 3.11.12 on 2026-08-15, 13 samples after three warmups measured
+frozen baseline `d9d6db50b342` at **89.047 ms** median and this implementation at
+**30.541 ms**, a **2.916x speedup**. Both runs found 237 matches and produced SHA-256
+`3700c5424eb93982b201ad55d39c98b191480afe6ec71c5fb5ff25b73c2401a1`. Fixture
+generation and interpreter startup are excluded; motif compilation, parsing, both scans, and
+output materialization are included. These are local timings; rerun with `PYTHONPATH` pointed
+at the desired source worktree.
 
 ## Verification
 

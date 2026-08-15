@@ -116,14 +116,30 @@ def _scan_one(
 ) -> Iterator[Match]:
     state = 0
     length = len(compiled.motif)
+    a, c, g, t = compiled.shift_masks
+    compatible_by_mask = (
+        0,
+        a,
+        c,
+        a | c,
+        g,
+        a | g,
+        c | g,
+        a | c | g,
+        t,
+        a | t,
+        c | t,
+        a | c | t,
+        g | t,
+        a | g | t,
+        c | g | t,
+        a | c | g | t,
+    )
+    masks = IUPAC_MASKS
+    accept_bit = compiled.accept_bit
     for end, symbol in enumerate(sequence):
-        sequence_mask = IUPAC_MASKS[symbol]
-        compatible_positions = 0
-        for base_index, base_bit in enumerate((1, 2, 4, 8)):
-            if sequence_mask & base_bit:
-                compatible_positions |= compiled.shift_masks[base_index]
-        state = ((state << 1) | 1) & compatible_positions
-        if state & compiled.accept_bit:
+        state = ((state << 1) | 1) & compatible_by_mask[masks[symbol]]
+        if state & accept_bit:
             start = end - length + 1
             yield Match(start, end + 1, strand, sequence[start : end + 1])
 
